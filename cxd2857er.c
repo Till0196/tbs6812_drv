@@ -18,6 +18,10 @@
 #include "cxd2857.h"
 #include "cxd2857_priv.h"
 
+/* CXD2857 supports 9 delivery systems, override kernel default of 8 */
+#undef MAX_DELSYS
+#define MAX_DELSYS 16
+
 static LIST_HEAD(cxdlist);
 
 struct cxd_base {
@@ -89,6 +93,9 @@ static struct sony_freia_terr_adjust_param_t
 					     OFFSET(-7), AUTO, AUTO },
 		[SONY_FREIA_DTV_CABLE_6] = { AUTO, 0x03, 0x09, 0x09, 0x09, 0x03,
 					     0x03, 0x03, 0x00, BW_6, OFFSET(3),
+					     OFFSET(8), AUTO, AUTO },
+		[SONY_FREIA_DTV_SKP_OPT] = { AUTO, 0x03, 0x09, 0x09, 0x09, 0x03,
+					     0x03, 0x03, 0x00, BW_6, OFFSET(4),
 					     OFFSET(8), AUTO, AUTO },
 	};
 
@@ -820,6 +827,11 @@ static int cxd2857_tune(struct cxd2878_dev *dev, u32 frequencykHz)
 		tuner_state = SONY_TUNER_STATE_T;
 		frequencykHz /= 1000;
 		break;
+	case SONY_DTV_SYSTEM_J83B:
+		tvSystem = SONY_FREIA_DTV_SKP_OPT;
+		tuner_state = SONY_TUNER_STATE_T;
+		frequencykHz /= 1000;
+		break;
 
 	default:
 	case SONY_DTV_SYSTEM_UNKNOWN:
@@ -1216,7 +1228,8 @@ static int cxd2878_setTSClkModeAndFreq(struct cxd2878_dev *dev)
 	    (dev->system == SONY_DTV_SYSTEM_DVBS) ||
 	    (dev->system == SONY_DTV_SYSTEM_DVBS2) ||
 	    (dev->system == SONY_DTV_SYSTEM_DVBC) ||
-	    (dev->system == SONY_DTV_SYSTEM_ISDBC))
+	    (dev->system == SONY_DTV_SYSTEM_ISDBC) ||
+	    (dev->system == SONY_DTV_SYSTEM_J83B))
 		tsRateCtrlOff = 1;
 	if (dev->system == SONY_DTV_SYSTEM_ISDBS3)
 		tsInOff = 1;
@@ -1600,7 +1613,8 @@ static int cxd2878_sleep(struct dvb_frontend *fe)
 			break;
 		}
 		case SONY_DTV_SYSTEM_DVBC:
-		case SONY_DTV_SYSTEM_ISDBC: {
+		case SONY_DTV_SYSTEM_ISDBC:
+		case SONY_DTV_SYSTEM_J83B: {
 			cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
 			cxd2878_wr(dev, dev->slvx, 0x18, 0x01);
 			cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
@@ -2359,6 +2373,7 @@ err:
 /* Cable 6MHz band setting */
 static int cable_band_setting_6mhz(struct cxd2878_dev *dev)
 {
+	/* ITB coefficients - DVB-T BW6 values */
 	u8 itbCoef[14] = {
 		0x27, 0xA7, 0x28, 0xB3, 0x02, 0xF0, 0x01,
 		0xE8, 0x00, 0xCF, 0x00, 0xE6, 0x23, 0xA4
@@ -2572,7 +2587,7 @@ static int cxd2878_set_dvbc(struct dvb_frontend *fe, int isdb_c)
 {
 	struct cxd2878_dev *dev = fe->demodulator_priv;
 	int ret = 0;
-	enum sony_dtv_system_t target_sys = isdb_c ? SONY_DTV_SYSTEM_ISDBC :
+	enum sony_dtv_system_t target_sys = isdb_c ? SONY_DTV_SYSTEM_J83B :
 						     SONY_DTV_SYSTEM_DVBC;
 
 	if (dev->base->config.LED_switch)
@@ -2924,6 +2939,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 		break;
 	}
 	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_B:
 	case SYS_DVBC_ANNEX_C: {
 		cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
 		cxd2878_rdm(dev, dev->slvt, 0x10, &data, 1);
@@ -2948,6 +2964,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 	case SYS_DVBT:
 	case SYS_DVBT2:
 	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_B:
 	case SYS_DVBC_ANNEX_C:
 		ret |= cxd2878_i2c_repeater(dev, 1);
 		ret |= cxd2857_read_rssi_isdbt(dev, c->frequency / 1000,
@@ -3037,6 +3054,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 			break;
 		}
 		case SYS_DVBC_ANNEX_A:
+		case SYS_DVBC_ANNEX_B:
 		case SYS_DVBC_ANNEX_C: {
 			u16 reg_dvbc;
 			cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
@@ -3071,6 +3089,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 		case SYS_DVBT:
 		case SYS_DVBT2:
 		case SYS_DVBC_ANNEX_A:
+		case SYS_DVBC_ANNEX_B:
 		case SYS_DVBC_ANNEX_C:
 			cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
 			cxd2878_rdm(dev, dev->slvt, 0x1F, datapacketerr, 6);
@@ -3168,6 +3187,9 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 		break;
 	case SYS_DVBC_ANNEX_A:
 		ret = cxd2878_set_dvbc(fe, 0);
+		break;
+	case SYS_DVBC_ANNEX_B:
+		ret = cxd2878_set_dvbc(fe, 1);
 		break;
 	case SYS_DVBC_ANNEX_C:
 		ret = cxd2878_set_dvbc(fe, 1);
@@ -3380,7 +3402,7 @@ static void cxd2878_release(struct dvb_frontend *fe)
 }
 
 static const struct dvb_frontend_ops cxd2878_ops = {
-	.delsys = {SYS_ISDBT, SYS_ISDBS, SYS_DVBT, SYS_DVBT2, SYS_DVBS, SYS_DVBS2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_C},
+	.delsys = {SYS_ISDBT, SYS_ISDBS, SYS_DVBT, SYS_DVBT2, SYS_DVBS, SYS_DVBS2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B, SYS_DVBC_ANNEX_C},
 	.info = {
 			.name = "SONY CXD2857",
 			.frequency_min_hz = 45*MHz,
