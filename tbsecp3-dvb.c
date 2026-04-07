@@ -874,7 +874,7 @@ static int max_send_burst(struct dvb_frontend *fe, enum fe_sec_mini_cmd burst)
 	//printk("send burst: %d\n", burst);
 	return 0;
 }
-static void RF_switch(struct i2c_adapter *i2c,u8 rf_in,u8 flag)//flag : 0: dvbs/s2 signal 1:Terrestrial and cable signal 
+static void RF_switch(struct i2c_adapter *i2c,u8 rf_in,u8 flag)//flag : 0: dvbs/s2 signal 1:Terrestrial and cable signal
 {
 	struct tbsecp3_i2c *i2c_adap = i2c_get_adapdata(i2c);
 	struct tbsecp3_dev *dev = i2c_adap->dev;
@@ -884,14 +884,18 @@ static void RF_switch(struct i2c_adapter *i2c,u8 rf_in,u8 flag)//flag : 0: dvbs/
 		tbsecp3_gpio_set_pin(dev, &dev->adapter[rf_in].cfg->gpio.lnb_power, 0);
 
 	reg = 0x8+rf_in*4;
-	
+
 	val = tbs_read(TBSECP3_GPIO_BASE, reg);
+	dev_dbg(&dev->pci_dev->dev, "RF_switch: rf_in=%d flag=%d reg=0x%x val_before=0x%08x\n",
+		rf_in, flag, reg, val);
 	if(flag)
 		val |= 2;
 	else
 		val &= ~2;
-		
+
 	tbs_write(TBSECP3_GPIO_BASE, reg, val);
+	val = tbs_read(TBSECP3_GPIO_BASE, reg);
+	dev_dbg(&dev->pci_dev->dev, "RF_switch: val_after=0x%08x\n", val);
 
 }
 
@@ -1390,6 +1394,26 @@ static struct cxd2878_config tbs6590se_cfg[] = {
 	};
 #endif
 
+static void tbs6812_RF_switch(struct i2c_adapter *i2c, u8 rf_in, u8 flag)
+{
+	struct tbsecp3_i2c *i2c_adap = i2c_get_adapdata(i2c);
+	struct tbsecp3_dev *dev = i2c_adap->dev;
+	u32 val, reg;
+
+	if (flag)
+		tbsecp3_gpio_set_pin(dev, &dev->adapter[rf_in].cfg->gpio.lnb_power, 0);
+
+	reg = 0x8 + rf_in * 4;
+
+	val = tbs_read(TBSECP3_GPIO_BASE, reg);
+	if (flag)
+		val |= 2;
+	else
+		val &= ~2;
+
+	tbs_write(TBSECP3_GPIO_BASE, reg, val);
+}
+
 static struct cxd2857_config tbs6812_cfg[] = {
 		{
 		.addr_slvt	= 0x64,
@@ -1398,6 +1422,7 @@ static struct cxd2857_config tbs6812_cfg[] = {
 		.tuner_xtal	= SONY_ASCOT3_XTAL_24000KHz,
 		.tuner_index	= 1,
 		.tlv_mode	= 1,
+		.rf_port	= 0,
 		},
 		{
 		.addr_slvt	= 0x64,
@@ -1406,6 +1431,7 @@ static struct cxd2857_config tbs6812_cfg[] = {
 		.tuner_xtal	= SONY_ASCOT3_XTAL_24000KHz,
 		.tuner_index	= 2,
 		.tlv_mode	= 1,
+		.rf_port	= 1,
 		}
 	};
 static void tbs_octuples_reset_demod(struct tbsecp3_adapter *adapter)
@@ -1500,6 +1526,7 @@ static int tbsecp3_frontend_attach(struct tbsecp3_adapter *adapter)
 	   case TBSECP3_BOARD_TBS6812:
 	   	tbs_octuples_reset_demod(adapter);
 	   	set_mac_address(adapter);
+		tbs6812_cfg[adapter->nr].RF_switch = tbs6812_RF_switch;
 		adapter->fe = dvb_attach(cxd2857_attach, &tbs6812_cfg[adapter->nr], i2c);
 		if (adapter->fe == NULL)
 		     goto frontend_atach_fail;
