@@ -1503,6 +1503,11 @@ static int tbsecp3_frontend_attach(struct tbsecp3_adapter *adapter)
 		adapter->fe = dvb_attach(cxd2857_attach, &tbs6812_cfg[adapter->nr], i2c);
 		if (adapter->fe == NULL)
 		     goto frontend_atach_fail;
+		if (tbsecp3_attach_sec(adapter, adapter->fe) == NULL) {
+			dev_warn(&dev->pci_dev->dev,
+				"error attaching lnb control on adapter %d\n",
+				adapter->nr);
+		}
 		break;
 #ifdef TBS_DVB_EXTENSION
 	   case TBSECP3_BOARD_TBS6590SE:   

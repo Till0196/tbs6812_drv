@@ -1740,6 +1740,10 @@ static int SLtoAIS3(struct cxd2878_dev *dev)
 	int ret = 0;
 	u8 tlv_output = 1;
 
+	/* ISDB-S3 requires B9 bit0 set in bank 0xA0 before mode transition */
+	cxd2878_wr(dev, dev->slvt, 0x00, 0xa0);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0xb9, 0x01, 0x01);
+
 	if (tlv_output)
 		ret = cxd2878_setTLVClkModeAndFreq(dev);
 	else
@@ -2265,9 +2269,11 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 	if (!dev->warm)
 		cxd2878_init(fe);
 
-	if (dev->base->config.RF_switch)
+	if (dev->base->config.RF_switch) {
+		int rf_flag = (c->delivery_system == SYS_ISDBS) ? 0 : 1;
 		dev->base->config.RF_switch(dev->base->i2c,
-					    dev->base->config.rf_port, 1);
+					    dev->base->config.rf_port, rf_flag);
+	}
 	if (dev->base->config.TS_switch)
 		dev->base->config.TS_switch(dev->base->i2c, 1);
 
