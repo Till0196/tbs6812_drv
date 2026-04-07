@@ -69,6 +69,27 @@ static struct sony_freia_terr_adjust_param_t
 		[SONY_FREIA_DTV_ISDBT_8] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
 					     0x03, 0x03, 0x00, BW_8, OFFSET(-5),
 					     OFFSET(-7), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT_6] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					    0x03, 0x03, 0x00, BW_6, OFFSET(-9),
+					    OFFSET(-5), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT_7] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					    0x03, 0x03, 0x00, BW_7, OFFSET(-7),
+					    OFFSET(-6), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT_8] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					    0x03, 0x03, 0x00, BW_8, OFFSET(-5),
+					    OFFSET(-7), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT2_6] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					     0x03, 0x03, 0x00, BW_6, OFFSET(-9),
+					     OFFSET(-5), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT2_7] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					     0x03, 0x03, 0x00, BW_7, OFFSET(-7),
+					     OFFSET(-6), AUTO, AUTO },
+		[SONY_FREIA_DTV_DVBT2_8] = { AUTO, 0x07, 0x0d, 0x0d, 0x0d, 0x03,
+					     0x03, 0x03, 0x00, BW_8, OFFSET(-5),
+					     OFFSET(-7), AUTO, AUTO },
+		[SONY_FREIA_DTV_CABLE_6] = { AUTO, 0x03, 0x09, 0x09, 0x09, 0x03,
+					     0x03, 0x03, 0x00, BW_6, OFFSET(3),
+					     OFFSET(8), AUTO, AUTO },
 	};
 
 static const u8 log2LookUp[] = {
@@ -745,6 +766,61 @@ static int cxd2857_tune(struct cxd2878_dev *dev, u32 frequencykHz)
 		tvSystem = SONY_FREIA_STV_ISDBS3;
 		tuner_state = SONY_TUNER_STATE_S;
 		break;
+
+	case SONY_DTV_SYSTEM_DVBT:
+		switch (dev->bandwidth) {
+		case SONY_DTV_BW_6_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT_6;
+			break;
+		case SONY_DTV_BW_7_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT_7;
+			break;
+		case SONY_DTV_BW_8_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT_8;
+			break;
+		default:
+			tvSystem = SONY_FREIA_DTV_DVBT_8;
+			break;
+		}
+		tuner_state = SONY_TUNER_STATE_T;
+		frequencykHz /= 1000;
+		break;
+
+	case SONY_DTV_SYSTEM_DVBT2:
+		switch (dev->bandwidth) {
+		case SONY_DTV_BW_6_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT2_6;
+			break;
+		case SONY_DTV_BW_7_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT2_7;
+			break;
+		case SONY_DTV_BW_8_MHZ:
+			tvSystem = SONY_FREIA_DTV_DVBT2_8;
+			break;
+		default:
+			tvSystem = SONY_FREIA_DTV_DVBT2_8;
+			break;
+		}
+		tuner_state = SONY_TUNER_STATE_T;
+		frequencykHz /= 1000;
+		break;
+
+	case SONY_DTV_SYSTEM_DVBS:
+		tvSystem = SONY_FREIA_STV_DVBS;
+		tuner_state = SONY_TUNER_STATE_S;
+		break;
+	case SONY_DTV_SYSTEM_DVBS2:
+		tvSystem = SONY_FREIA_STV_DVBS2;
+		tuner_state = SONY_TUNER_STATE_S;
+		break;
+
+	case SONY_DTV_SYSTEM_DVBC:
+	case SONY_DTV_SYSTEM_ISDBC:
+		tvSystem = SONY_FREIA_DTV_CABLE_6;
+		tuner_state = SONY_TUNER_STATE_T;
+		frequencykHz /= 1000;
+		break;
+
 	default:
 	case SONY_DTV_SYSTEM_UNKNOWN:
 		goto err;
@@ -1134,7 +1210,13 @@ static int cxd2878_setTSClkModeAndFreq(struct cxd2878_dev *dev)
 		goto err;
 	if ((dev->system == SONY_DTV_SYSTEM_ISDBT) ||
 	    (dev->system == SONY_DTV_SYSTEM_ISDBS) ||
-	    (dev->system == SONY_DTV_SYSTEM_ISDBS3))
+	    (dev->system == SONY_DTV_SYSTEM_ISDBS3) ||
+	    (dev->system == SONY_DTV_SYSTEM_DVBT) ||
+	    (dev->system == SONY_DTV_SYSTEM_DVBT2) ||
+	    (dev->system == SONY_DTV_SYSTEM_DVBS) ||
+	    (dev->system == SONY_DTV_SYSTEM_DVBS2) ||
+	    (dev->system == SONY_DTV_SYSTEM_DVBC) ||
+	    (dev->system == SONY_DTV_SYSTEM_ISDBC))
 		tsRateCtrlOff = 1;
 	if (dev->system == SONY_DTV_SYSTEM_ISDBS3)
 		tsInOff = 1;
@@ -1485,7 +1567,54 @@ static int cxd2878_sleep(struct dvb_frontend *fe)
 			cxd2878_wr(dev, dev->slvx, 0x17, 0x01);
 			break;
 		}
+		case SONY_DTV_SYSTEM_DVBT:
+		case SONY_DTV_SYSTEM_DVBT2: {
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+			cxd2878_wr(dev, dev->slvt, 0x69, 0x05);
+			cxd2878_wr(dev, dev->slvt, 0x6B, 0x07);
+			cxd2878_wr(dev, dev->slvt, 0x9D, 0x14);
+			cxd2878_wr(dev, dev->slvt, 0xD3, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0xED, 0x01);
+			cxd2878_wr(dev, dev->slvt, 0xE2, 0x4E);
+			cxd2878_wr(dev, dev->slvt, 0xF2, 0x03);
+			cxd2878_wr(dev, dev->slvt, 0xDE, 0x32);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x15);
+			cxd2878_wr(dev, dev->slvt, 0xDE, 0x03);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x17);
+			u8 data_dvbt[2] = { 0x01, 0x02 };
+			cxd2878_wrm(dev, dev->slvt, 0x38, data_dvbt, 2);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x1E);
+			cxd2878_wr(dev, dev->slvt, 0x73, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x63);
+			cxd2878_wr(dev, dev->slvt, 0x81, 0x01);
+
+			cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+			cxd2878_wr(dev, dev->slvx, 0x18, 0x01);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0x49, 0x33);
+			cxd2878_wr(dev, dev->slvt, 0x4B, 0x21);
+			cxd2878_wr(dev, dev->slvt, 0xFE, 0x01);
+			cxd2878_wr(dev, dev->slvt, 0x2C, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0xA9, 0x00);
+			cxd2878_wr(dev, dev->slvx, 0x17, 0x01);
+			break;
+		}
+		case SONY_DTV_SYSTEM_DVBC:
+		case SONY_DTV_SYSTEM_ISDBC: {
+			cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+			cxd2878_wr(dev, dev->slvx, 0x18, 0x01);
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0x49, 0x33);
+			cxd2878_wr(dev, dev->slvt, 0x4B, 0x21);
+			cxd2878_wr(dev, dev->slvt, 0xFE, 0x01);
+			cxd2878_wr(dev, dev->slvt, 0x2C, 0x00);
+			cxd2878_wr(dev, dev->slvt, 0xA9, 0x00);
+			cxd2878_wr(dev, dev->slvx, 0x17, 0x01);
+			break;
+		}
 		case SONY_DTV_SYSTEM_ISDBS:
+		case SONY_DTV_SYSTEM_DVBS:
+		case SONY_DTV_SYSTEM_DVBS2:
 			cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
 			cxd2878_wr(dev, dev->slvx, 0x18, 0x01);
 			cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
@@ -1810,6 +1939,670 @@ err:
 	dev_err(&dev->base->i2c->dev, "%s: SLtoAIS3 error !", KBUILD_MODNAME);
 	return ret;
 }
+
+/* DVB-T band setting */
+static int SLtoADT_BandSetting(struct cxd2878_dev *dev)
+{
+	int ret = 0;
+	u8 data[3];
+
+	u8 nominalRate_8[5] = { 0x11, 0xF0, 0x00, 0x00, 0x00 };
+	u8 itbCoef_8[14] = {
+		0x26, 0xAF, 0x06, 0xCD, 0x13, 0xBB, 0x28,
+		0xBA, 0x23, 0xA9, 0x1F, 0xA8, 0x2C, 0xC8
+	};
+	u8 nominalRate_7[5] = { 0x14, 0x80, 0x00, 0x00, 0x00 };
+	u8 itbCoef_7[14] = {
+		0x2C, 0xBD, 0x02, 0xCF, 0x04, 0xF8, 0x23,
+		0xA6, 0x29, 0xB0, 0x26, 0xA9, 0x21, 0xA5
+	};
+	u8 nominalRate_6[5] = { 0x17, 0xEA, 0xAA, 0xAA, 0xAA };
+	u8 itbCoef_6[14] = {
+		0x27, 0xA7, 0x28, 0xB3, 0x02, 0xF0, 0x01,
+		0xE8, 0x00, 0xCF, 0x00, 0xE6, 0x23, 0xA4
+	};
+
+	ret = cxd2878_wr(dev, dev->slvt, 0x00, 0x13);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvt, 0x9C, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x9D, 0x14);
+
+	ret = cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	if (ret)
+		goto err;
+	switch (dev->bandwidth) {
+	case SONY_DTV_BW_8_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_8, 5);
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_8, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT_8 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT_8 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT_8 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x00, 0x07);
+		{
+			u8 dataxd9[2] = { 0x01, 0xE0 };
+			cxd2878_wrm(dev, dev->slvt, 0xD9, dataxd9, 2);
+		}
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x17);
+		{
+			u8 datax38[2] = { 0x01, 0x02 };
+			cxd2878_wrm(dev, dev->slvt, 0x38, datax38, 2);
+		}
+		break;
+	case SONY_DTV_BW_7_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_7, 5);
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_7, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT_7 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT_7 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT_7 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x02, 0x07);
+		{
+			u8 dataxd9[2] = { 0x12, 0xF8 };
+			cxd2878_wrm(dev, dev->slvt, 0xD9, dataxd9, 2);
+		}
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x17);
+		{
+			u8 datax38[2] = { 0x00, 0x03 };
+			cxd2878_wrm(dev, dev->slvt, 0x38, datax38, 2);
+		}
+		break;
+	case SONY_DTV_BW_6_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_6, 5);
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_6, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT_6 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT_6 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT_6 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x04, 0x07);
+		{
+			u8 dataxd9[2] = { 0x1F, 0xDC };
+			cxd2878_wrm(dev, dev->slvt, 0xD9, dataxd9, 2);
+		}
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x17);
+		{
+			u8 datax38[2] = { 0x00, 0x03 };
+			cxd2878_wrm(dev, dev->slvt, 0x38, datax38, 2);
+		}
+		break;
+	default:
+		goto err;
+	}
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADT_BandSetting error !",
+		KBUILD_MODNAME);
+	return ret;
+}
+
+/* SLEEP to ACTIVE DVB-T */
+static int SLtoADT(struct cxd2878_dev *dev)
+{
+	int ret = 0;
+
+	ret = cxd2878_setTSClkModeAndFreq(dev);
+	if (ret)
+		goto err;
+	ret = cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvx, 0x17, 0x07);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xA9, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2C, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x4B, 0x74);
+	cxd2878_wr(dev, dev->slvt, 0x49, 0x00);
+	cxd2878_wr(dev, dev->slvx, 0x18, 0x00);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x11);
+	cxd2878_wr(dev, dev->slvt, 0x6A, 0x50);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_wr(dev, dev->slvt, 0xA5, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+
+	u8 dataxce[2] = { 0x00, 0x00 };
+	cxd2878_wrm(dev, dev->slvt, 0xCE, dataxce, 2);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_wr(dev, dev->slvt, 0x69, 0x04);
+	cxd2878_wr(dev, dev->slvt, 0x6B, 0x03);
+	cxd2878_wr(dev, dev->slvt, 0x9D, 0x50);
+	cxd2878_wr(dev, dev->slvt, 0xD3, 0x06);
+	cxd2878_wr(dev, dev->slvt, 0xED, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xE2, 0xCE);
+	cxd2878_wr(dev, dev->slvt, 0xF2, 0x13);
+	cxd2878_wr(dev, dev->slvt, 0xDE, 0x2E);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x15);
+	cxd2878_wr(dev, dev->slvt, 0xDE, 0x02);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x17);
+
+	u8 datax38[2] = { 0x00, 0x03 };
+	cxd2878_wrm(dev, dev->slvt, 0x38, datax38, 2);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x1E);
+	cxd2878_wr(dev, dev->slvt, 0x73, 0x68);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x63);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x11);
+
+	u8 datax33[3] = { 0x00, 0x03, 0x3B };
+	cxd2878_wrm(dev, dev->slvt, 0x33, datax33, 3);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x60);
+
+	u8 dataxa8[2] = { 0xB7, 0x1B };
+	cxd2878_wrm(dev, dev->slvt, 0xA8, dataxa8, 2);
+
+	SLtoADT_BandSetting(dev);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x80, 0x28);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+
+	cxd2878_setTSDataPinHiZ(dev, 0);
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADT error !", KBUILD_MODNAME);
+	return ret;
+}
+
+/* DVB-T2 band setting */
+static int SLtoADT2_BandSetting(struct cxd2878_dev *dev)
+{
+	int ret = 0;
+	u8 data[3];
+
+	u8 nominalRate_8[5] = { 0x11, 0xF0, 0x00, 0x00, 0x00 };
+	u8 itbCoef_8[14] = {
+		0x26, 0xAF, 0x06, 0xCD, 0x13, 0xBB, 0x28,
+		0xBA, 0x23, 0xA9, 0x1F, 0xA8, 0x2C, 0xC8
+	};
+	u8 nominalRate_7[5] = { 0x14, 0x80, 0x00, 0x00, 0x00 };
+	u8 itbCoef_7[14] = {
+		0x2C, 0xBD, 0x02, 0xCF, 0x04, 0xF8, 0x23,
+		0xA6, 0x29, 0xB0, 0x26, 0xA9, 0x21, 0xA5
+	};
+	u8 nominalRate_6[5] = { 0x17, 0xEA, 0xAA, 0xAA, 0xAA };
+	u8 itbCoef_6[14] = {
+		0x27, 0xA7, 0x28, 0xB3, 0x02, 0xF0, 0x01,
+		0xE8, 0x00, 0xCF, 0x00, 0xE6, 0x23, 0xA4
+	};
+
+	/* Nominal rate goes to bank 0x20 for DVB-T2 */
+	ret = cxd2878_wr(dev, dev->slvt, 0x00, 0x20);
+	if (ret)
+		goto err;
+	switch (dev->bandwidth) {
+	case SONY_DTV_BW_8_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_8, 5);
+		break;
+	case SONY_DTV_BW_7_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_7, 5);
+		break;
+	case SONY_DTV_BW_6_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0x9F, nominalRate_6, 5);
+		break;
+	default:
+		goto err;
+	}
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x27);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x7A, 0x00, 0x0F);
+
+	ret = cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	if (ret)
+		goto err;
+	switch (dev->bandwidth) {
+	case SONY_DTV_BW_8_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_8, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT2_8 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT2_8 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT2_8 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x00, 0x07);
+		break;
+	case SONY_DTV_BW_7_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_7, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT2_7 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT2_7 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT2_7 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x02, 0x07);
+		break;
+	case SONY_DTV_BW_6_MHZ:
+		cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef_6, 14);
+		data[0] = (u8)((dev->iffreqConfig.configDVBT2_6 >> 16) & 0xFF);
+		data[1] = (u8)((dev->iffreqConfig.configDVBT2_6 >> 8) & 0xFF);
+		data[2] = (u8)(dev->iffreqConfig.configDVBT2_6 & 0xFF);
+		cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+		cxd2878_SetRegisterBits(dev, dev->slvt, 0xD7, 0x04, 0x07);
+		break;
+	default:
+		goto err;
+	}
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADT2_BandSetting error !",
+		KBUILD_MODNAME);
+	return ret;
+}
+
+/* Set DVB-T2 PLP ID */
+static int set_dvbt2_plp_id(struct cxd2878_dev *dev, int stream_id)
+{
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x23);
+	if (stream_id < 0) {
+		/* Auto PLP selection */
+		cxd2878_wr(dev, dev->slvt, 0xAD, 0x00);
+	} else {
+		cxd2878_wr(dev, dev->slvt, 0xAF, (u8)(stream_id & 0xFF));
+		cxd2878_wr(dev, dev->slvt, 0xAD, 0x01);
+	}
+	return 0;
+}
+
+/* SLEEP to ACTIVE DVB-T2 */
+static int SLtoADT2(struct cxd2878_dev *dev, int stream_id)
+{
+	int ret = 0;
+
+	ret = cxd2878_setTSClkModeAndFreq(dev);
+	if (ret)
+		goto err;
+	ret = cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvx, 0x17, 0x09);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xA9, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2C, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x4B, 0x74);
+	cxd2878_wr(dev, dev->slvt, 0x49, 0x00);
+	cxd2878_wr(dev, dev->slvx, 0x18, 0x00);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x11);
+	cxd2878_wr(dev, dev->slvt, 0x6A, 0x50);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_wr(dev, dev->slvt, 0xA5, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x20);
+	cxd2878_wr(dev, dev->slvt, 0x8B, 0x3C);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x2B);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x76, 0x20, 0x70);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	u8 dataxce[2] = { 0x00, 0x00 };
+	cxd2878_wrm(dev, dev->slvt, 0xCE, dataxce, 2);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x13);
+	cxd2878_wr(dev, dev->slvt, 0x83, 0x10);
+	cxd2878_wr(dev, dev->slvt, 0x86, 0x34);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x9E, 0x09, 0x0F);
+	cxd2878_wr(dev, dev->slvt, 0x9F, 0xD8);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x2A);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x38, 0x04, 0x0F);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x2B);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x11, 0x20, 0x3F);
+
+	SLtoADT2_BandSetting(dev);
+	set_dvbt2_plp_id(dev, stream_id);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x80, 0x28);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+
+	cxd2878_setTSDataPinHiZ(dev, 0);
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADT2 error !", KBUILD_MODNAME);
+	return ret;
+}
+
+/* SLEEP to ACTIVE DVB-S */
+static int SLtoADS(struct cxd2878_dev *dev)
+{
+	int ret = 0;
+
+	ret = cxd2878_setTSClkModeAndFreq(dev);
+	if (ret)
+		goto err;
+	ret = cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvx, 0x17, 0x0a);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2d, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xa9, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2c, 0x01);
+	cxd2878_wr(dev, dev->slvx, 0x28, 0x31);
+	cxd2878_wr(dev, dev->slvt, 0x4b, 0x31);
+	cxd2878_wr(dev, dev->slvt, 0x6a, 0x00);
+	cxd2878_wr(dev, dev->slvx, 0x18, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x20, 0x01);
+
+	u8 dataxce[2] = { 0x00, 0x00 };
+	cxd2878_wrm(dev, dev->slvt, 0xCE, dataxce, 2);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0xae);
+	u8 datax20[3] = { 0x07, 0x37, 0x0a };
+	cxd2878_wrm(dev, dev->slvt, 0x20, datax20, 3);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0xa0);
+	cxd2878_wr(dev, dev->slvt, 0xd7, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x80, 0x30);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+	cxd2878_setTSDataPinHiZ(dev, 0);
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADS error !", KBUILD_MODNAME);
+	return ret;
+}
+
+/* SLEEP to ACTIVE DVB-S2 */
+static int SLtoADS2(struct cxd2878_dev *dev)
+{
+	int ret = 0;
+
+	ret = cxd2878_setTSClkModeAndFreq(dev);
+	if (ret)
+		goto err;
+	ret = cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvx, 0x17, 0x0b);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2d, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xa9, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2c, 0x01);
+	cxd2878_wr(dev, dev->slvx, 0x28, 0x31);
+	cxd2878_wr(dev, dev->slvt, 0x4b, 0x31);
+	cxd2878_wr(dev, dev->slvt, 0x6a, 0x00);
+	cxd2878_wr(dev, dev->slvx, 0x18, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x20, 0x01);
+
+	u8 dataxce[2] = { 0x00, 0x00 };
+	cxd2878_wrm(dev, dev->slvt, 0xCE, dataxce, 2);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0xae);
+	u8 datax20[3] = { 0x07, 0x37, 0x0a };
+	cxd2878_wrm(dev, dev->slvt, 0x20, datax20, 3);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0xa0);
+	cxd2878_wr(dev, dev->slvt, 0xd7, 0x00);
+
+	/* Set symbol rate if configured */
+	if (dev->symbol_rate > 0) {
+		u32 sr_ksps = dev->symbol_rate / 1000;
+		u64 reg_value = ((u64)sr_ksps * 16384 + 500) / 1000;
+		u8 sr_data[3];
+		sr_data[0] = (u8)((reg_value >> 16) & 0x0F);
+		sr_data[1] = (u8)((reg_value >> 8) & 0xFF);
+		sr_data[2] = (u8)(reg_value & 0xFF);
+		cxd2878_wr(dev, dev->slvt, 0x00, 0xae);
+		cxd2878_wrm(dev, dev->slvt, 0x20, sr_data, 3);
+	}
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x80, 0x30);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+	cxd2878_setTSDataPinHiZ(dev, 0);
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADS2 error !", KBUILD_MODNAME);
+	return ret;
+}
+
+/* Cable 6MHz band setting */
+static int cable_band_setting_6mhz(struct cxd2878_dev *dev)
+{
+	u8 itbCoef[14] = {
+		0x27, 0xA7, 0x28, 0xB3, 0x02, 0xF0, 0x01,
+		0xE8, 0x00, 0xCF, 0x00, 0xE6, 0x23, 0xA4
+	};
+	u8 data[3];
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_wrm(dev, dev->slvt, 0xA6, itbCoef, 14);
+	data[0] = (u8)((dev->iffreqConfig.configDVBC_6 >> 16) & 0xFF);
+	data[1] = (u8)((dev->iffreqConfig.configDVBC_6 >> 8) & 0xFF);
+	data[2] = (u8)(dev->iffreqConfig.configDVBC_6 & 0xFF);
+	cxd2878_wrm(dev, dev->slvt, 0xB6, data, 3);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x11);
+	cxd2878_wr(dev, dev->slvt, 0xA3, 0x14);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x26, 0x08, 0x0F);
+	cxd2878_wr(dev, dev->slvt, 0x27, 0x6E);
+
+	return 0;
+}
+
+/* SLEEP to ACTIVE DVB-C / ISDB-C */
+static int SLtoADC(struct cxd2878_dev *dev, int isdb_c)
+{
+	int ret = 0;
+	u8 mode_select = isdb_c ? 0x08 : 0x04;
+
+	ret = cxd2878_setTSClkModeAndFreq(dev);
+	if (ret)
+		goto err;
+	ret = cxd2878_wr(dev, dev->slvx, 0x00, 0x00);
+	if (ret)
+		goto err;
+	cxd2878_wr(dev, dev->slvx, 0x17, mode_select);
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0xA9, 0x00);
+	cxd2878_wr(dev, dev->slvt, 0x2C, 0x01);
+	cxd2878_wr(dev, dev->slvt, 0x4B, 0x74);
+	cxd2878_wr(dev, dev->slvt, 0x49, 0x00);
+	cxd2878_wr(dev, dev->slvx, 0x18, 0x00);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0xD2, 0x09, 0x1F);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x11);
+	cxd2878_wr(dev, dev->slvt, 0x6A, 0x48);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+	cxd2878_wr(dev, dev->slvt, 0xA5, 0x01);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0xC3, 0x00, 0x04);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0xCE, 0x01, 0x01);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0xCF, 0x01, 0x01);
+
+	cable_band_setting_6mhz(dev);
+
+	cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+	cxd2878_SetRegisterBits(dev, dev->slvt, 0x80, 0x08, 0x1F);
+	cxd2878_wr(dev, dev->slvt, 0x81, 0x00);
+
+	cxd2878_setTSDataPinHiZ(dev, 0);
+
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: SLtoADC error !", KBUILD_MODNAME);
+	return ret;
+}
+
+/* Set frontend functions for new delivery systems */
+static int cxd2878_set_dvbt(struct dvb_frontend *fe)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
+	int ret = 0;
+
+	if (dev->base->config.LED_switch)
+		dev->base->config.LED_switch(dev->base->i2c, 5);
+
+	dev->bandwidth = (enum sony_dtv_bandwidth_t)(c->bandwidth_hz / 1000000);
+	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+	    (dev->system == SONY_DTV_SYSTEM_DVBT)) {
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+		cxd2878_wr(dev, dev->slvt, 0xC3, 0x01);
+		SLtoADT_BandSetting(dev);
+	} else if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+		   (dev->system != SONY_DTV_SYSTEM_DVBT)) {
+		cxd2878_sleep(fe);
+		dev->system = SONY_DTV_SYSTEM_DVBT;
+		SLtoADT(dev);
+	} else if (dev->state == SONY_DEMOD_STATE_SLEEP) {
+		dev->system = SONY_DTV_SYSTEM_DVBT;
+		SLtoADT(dev);
+	} else {
+		goto err;
+	}
+
+	dev->state = SONY_DEMOD_STATE_ACTIVE;
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: set dvbt error !", KBUILD_MODNAME);
+	return ret;
+}
+
+static int cxd2878_set_dvbt2(struct dvb_frontend *fe)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
+	int ret = 0;
+	int plp_id = (c->stream_id == NO_STREAM_ID_FILTER) ?
+		     -1 : (int)(c->stream_id & 0xFF);
+
+	if (dev->base->config.LED_switch)
+		dev->base->config.LED_switch(dev->base->i2c, 5);
+
+	dev->bandwidth = (enum sony_dtv_bandwidth_t)(c->bandwidth_hz / 1000000);
+	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+	    (dev->system == SONY_DTV_SYSTEM_DVBT2)) {
+		set_dvbt2_plp_id(dev, plp_id);
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+		cxd2878_wr(dev, dev->slvt, 0xC3, 0x01);
+		SLtoADT2_BandSetting(dev);
+	} else if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+		   (dev->system != SONY_DTV_SYSTEM_DVBT2)) {
+		cxd2878_sleep(fe);
+		dev->system = SONY_DTV_SYSTEM_DVBT2;
+		SLtoADT2(dev, plp_id);
+	} else if (dev->state == SONY_DEMOD_STATE_SLEEP) {
+		dev->system = SONY_DTV_SYSTEM_DVBT2;
+		SLtoADT2(dev, plp_id);
+	} else {
+		goto err;
+	}
+
+	dev->state = SONY_DEMOD_STATE_ACTIVE;
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: set dvbt2 error !", KBUILD_MODNAME);
+	return ret;
+}
+
+static int cxd2878_set_dvbs(struct dvb_frontend *fe)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	int ret = 0;
+
+	if (dev->base->config.LED_switch)
+		dev->base->config.LED_switch(dev->base->i2c, 5);
+
+	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+	    (dev->system == SONY_DTV_SYSTEM_DVBS)) {
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+		cxd2878_wr(dev, dev->slvt, 0xC3, 0x01);
+	} else if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+		   (dev->system != SONY_DTV_SYSTEM_DVBS)) {
+		cxd2878_sleep(fe);
+		dev->system = SONY_DTV_SYSTEM_DVBS;
+		SLtoADS(dev);
+	} else if (dev->state == SONY_DEMOD_STATE_SLEEP) {
+		dev->system = SONY_DTV_SYSTEM_DVBS;
+		SLtoADS(dev);
+	} else {
+		goto err;
+	}
+
+	dev->state = SONY_DEMOD_STATE_ACTIVE;
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: set dvbs error !", KBUILD_MODNAME);
+	return ret;
+}
+
+static int cxd2878_set_dvbs2(struct dvb_frontend *fe)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
+	int ret = 0;
+
+	if (dev->base->config.LED_switch)
+		dev->base->config.LED_switch(dev->base->i2c, 5);
+
+	dev->symbol_rate = c->symbol_rate;
+	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+	    (dev->system == SONY_DTV_SYSTEM_DVBS2)) {
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+		cxd2878_wr(dev, dev->slvt, 0xC3, 0x01);
+	} else if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+		   (dev->system != SONY_DTV_SYSTEM_DVBS2)) {
+		cxd2878_sleep(fe);
+		dev->system = SONY_DTV_SYSTEM_DVBS2;
+		SLtoADS2(dev);
+	} else if (dev->state == SONY_DEMOD_STATE_SLEEP) {
+		dev->system = SONY_DTV_SYSTEM_DVBS2;
+		SLtoADS2(dev);
+	} else {
+		goto err;
+	}
+
+	dev->state = SONY_DEMOD_STATE_ACTIVE;
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: set dvbs2 error !", KBUILD_MODNAME);
+	return ret;
+}
+
+static int cxd2878_set_dvbc(struct dvb_frontend *fe, int isdb_c)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	int ret = 0;
+	enum sony_dtv_system_t target_sys = isdb_c ? SONY_DTV_SYSTEM_ISDBC :
+						     SONY_DTV_SYSTEM_DVBC;
+
+	if (dev->base->config.LED_switch)
+		dev->base->config.LED_switch(dev->base->i2c, 5);
+
+	dev->bandwidth = SONY_DTV_BW_6_MHZ;
+	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+	    (dev->system == target_sys)) {
+		cable_band_setting_6mhz(dev);
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x00);
+		cxd2878_wr(dev, dev->slvt, 0xC3, 0x01);
+	} else if ((dev->state == SONY_DEMOD_STATE_ACTIVE) &&
+		   (dev->system != target_sys)) {
+		cxd2878_sleep(fe);
+		dev->system = target_sys;
+		SLtoADC(dev, isdb_c);
+	} else if (dev->state == SONY_DEMOD_STATE_SLEEP) {
+		dev->system = target_sys;
+		SLtoADC(dev, isdb_c);
+	} else {
+		goto err;
+	}
+
+	dev->state = SONY_DEMOD_STATE_ACTIVE;
+	return 0;
+err:
+	dev_err(&dev->base->i2c->dev, "%s: set dvbc error !", KBUILD_MODNAME);
+	return ret;
+}
+
 static int cxd2878_set_isdbt(struct dvb_frontend *fe)
 {
 	struct cxd2878_dev *dev = fe->demodulator_priv;
@@ -2087,6 +2880,8 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 	*status = 0;
 	switch (c->delivery_system) {
 	case SYS_ISDBT:
+	case SYS_DVBT:
+	case SYS_DVBT2:
 		cxd2878_wr(dev, dev->slvt, 0x00, 0x60);
 		cxd2878_rdm(dev, dev->slvt, 0x10, &data, 1);
 
@@ -2100,13 +2895,13 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 		else
 			*status = FE_HAS_SIGNAL | FE_HAS_CARRIER;
 		break;
-	case SYS_ISDBS: {
+	case SYS_ISDBS:
+	case SYS_DVBS:
+	case SYS_DVBS2: {
 		if (dev->symbol_rate >= 33750000) {
 			cxd2878_wr(dev, dev->slvt, 0x00, 0xa0);
 			cxd2878_rdm(dev, dev->slvt, 0x10, data3, 2);
-			// u8 agclockstat = (u8)((data3[0] & 0x20)? 1 : 0);
 			u8 tstlvlockstat = (u8)((data3[1] & 0x40) ? 1 : 0);
-			// u8 tmcclockstat = (u8)((data3[1] & 0x80) ? 1 : 0);
 
 			if (tstlvlockstat)
 				*status = FE_HAS_SIGNAL | FE_HAS_CARRIER |
@@ -2117,17 +2912,28 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 		} else {
 			cxd2878_wr(dev, dev->slvt, 0x00, 0xa0);
 			cxd2878_rdm(dev, dev->slvt, 0x10, data3, 3);
-			// u8 agclockstat = (u8)((data3[0] & 0x20)? 1 : 0);
-			u8 tslockstat = (u8)((data3[2] & 0x40) ? 1 : 0);
-			// u8 tmcclockstat = (u8)((data3[2] & 0x20) ? 1 : 0);
+			u8 tslockstat_sat = (u8)((data3[2] & 0x40) ? 1 : 0);
 
-			if (tslockstat)
+			if (tslockstat_sat)
 				*status = FE_HAS_SIGNAL | FE_HAS_CARRIER |
 					  FE_HAS_VITERBI | FE_HAS_SYNC |
 					  FE_HAS_LOCK;
 			else
 				*status = FE_HAS_SIGNAL | FE_HAS_CARRIER;
 		}
+		break;
+	}
+	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_C: {
+		cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
+		cxd2878_rdm(dev, dev->slvt, 0x10, &data, 1);
+		u8 cable_lock = (u8)((data & 0x20) ? 1 : 0);
+
+		if (cable_lock)
+			*status = FE_HAS_SIGNAL | FE_HAS_CARRIER |
+				  FE_HAS_VITERBI | FE_HAS_SYNC | FE_HAS_LOCK;
+		else
+			*status = FE_HAS_SIGNAL | FE_HAS_CARRIER;
 		break;
 	}
 	default:
@@ -2139,6 +2945,10 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 	c->strength.len = 0;
 	switch (c->delivery_system) {
 	case SYS_ISDBT:
+	case SYS_DVBT:
+	case SYS_DVBT2:
+	case SYS_DVBC_ANNEX_A:
+	case SYS_DVBC_ANNEX_C:
 		ret |= cxd2878_i2c_repeater(dev, 1);
 		ret |= cxd2857_read_rssi_isdbt(dev, c->frequency / 1000,
 					       &rflevel);
@@ -2148,6 +2958,8 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 		c->strength.stat[0].svalue = rflevel * 10 - 4500;
 		break;
 	case SYS_ISDBS:
+	case SYS_DVBS:
+	case SYS_DVBS2:
 		ret |= cxd2857_read_rflevel_isdbs(dev, c->frequency, &rflevel);
 		c->strength.len = 1;
 		c->strength.stat[0].scale = FE_SCALE_DECIBEL;
@@ -2162,6 +2974,8 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 
 	switch (c->delivery_system) {
 	case SYS_ISDBS:
+	case SYS_DVBS:
+	case SYS_DVBS2:
 		if (dev->symbol_rate >= 33750000) {
 			ret |= cxd2857_read_cnr_isdbs3(dev,
 						       &c->cnr.stat[0].svalue);
@@ -2192,6 +3006,48 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 			tmp16 = tmp[0] << 8 | tmp[1];
 			snr = 100 * (s32)sony_math_log10(tmp16) - 9031;
 			break;
+		case SYS_DVBT: {
+			u16 reg_dvbt;
+			u32 denom_dvbt;
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x10);
+			cxd2878_rdm(dev, dev->slvt, 0x28, tmp, 2);
+			reg_dvbt = tmp[0] << 8 | tmp[1];
+			if (reg_dvbt > 4996)
+				reg_dvbt = 4996;
+			denom_dvbt = 5350 - reg_dvbt;
+			if (denom_dvbt == 0)
+				denom_dvbt = 1;
+			snr = 100 * ((s32)sony_math_log10(reg_dvbt) -
+				     (s32)sony_math_log10(denom_dvbt)) + 28500;
+			break;
+		}
+		case SYS_DVBT2: {
+			u16 reg_dvbt2;
+			u32 denom_dvbt2;
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x20);
+			cxd2878_rdm(dev, dev->slvt, 0x28, tmp, 2);
+			reg_dvbt2 = tmp[0] << 8 | tmp[1];
+			if (reg_dvbt2 > 10876)
+				reg_dvbt2 = 10876;
+			denom_dvbt2 = 12600 - reg_dvbt2;
+			if (denom_dvbt2 == 0)
+				denom_dvbt2 = 1;
+			snr = 100 * ((s32)sony_math_log10(reg_dvbt2) -
+				     (s32)sony_math_log10(denom_dvbt2)) + 32000;
+			break;
+		}
+		case SYS_DVBC_ANNEX_A:
+		case SYS_DVBC_ANNEX_C: {
+			u16 reg_dvbc;
+			cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
+			cxd2878_rdm(dev, dev->slvt, 0x4C, tmp, 2);
+			reg_dvbc = ((tmp[0] & 0x1F) << 8) | tmp[1];
+			if (reg_dvbc == 0)
+				reg_dvbc = 1;
+			/* Simplified DVB-C SNR using log10 */
+			snr = -950 * (s32)sony_math_log10(reg_dvbc) + 36500;
+			break;
+		}
 		default:
 			break;
 		}
@@ -2212,6 +3068,10 @@ static int cxd2878_read_status(struct dvb_frontend *fe, enum fe_status *status)
 
 		switch (c->delivery_system) {
 		case SYS_ISDBT:
+		case SYS_DVBT:
+		case SYS_DVBT2:
+		case SYS_DVBC_ANNEX_A:
+		case SYS_DVBC_ANNEX_C:
 			cxd2878_wr(dev, dev->slvt, 0x00, 0x40);
 			cxd2878_rdm(dev, dev->slvt, 0x1F, datapacketerr, 6);
 			cxd2878_rdm(dev, dev->slvt, 0x5B, datapacketnum, 2);
@@ -2270,7 +3130,17 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 		cxd2878_init(fe);
 
 	if (dev->base->config.RF_switch) {
-		int rf_flag = (c->delivery_system == SYS_ISDBS) ? 0 : 1;
+		int rf_flag;
+		switch (c->delivery_system) {
+		case SYS_ISDBS:
+		case SYS_DVBS:
+		case SYS_DVBS2:
+			rf_flag = 0;
+			break;
+		default:
+			rf_flag = 1;
+			break;
+		}
 		dev->base->config.RF_switch(dev->base->i2c,
 					    dev->base->config.rf_port, rf_flag);
 	}
@@ -2283,6 +3153,24 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 		break;
 	case SYS_ISDBS:
 		ret = cxd2878_set_isdbs(fe);
+		break;
+	case SYS_DVBT:
+		ret = cxd2878_set_dvbt(fe);
+		break;
+	case SYS_DVBT2:
+		ret = cxd2878_set_dvbt2(fe);
+		break;
+	case SYS_DVBS:
+		ret = cxd2878_set_dvbs(fe);
+		break;
+	case SYS_DVBS2:
+		ret = cxd2878_set_dvbs2(fe);
+		break;
+	case SYS_DVBC_ANNEX_A:
+		ret = cxd2878_set_dvbc(fe, 0);
+		break;
+	case SYS_DVBC_ANNEX_C:
+		ret = cxd2878_set_dvbc(fe, 1);
 		break;
 	default:
 		goto err;
@@ -2358,6 +3246,14 @@ static int cxd2878_set_property(struct dvb_frontend *fe, u32 cmd, u32 data)
 			fe->ops.info.frequency_min_hz = 1032000 * MHz;
 			fe->ops.info.frequency_max_hz = 3224000 * MHz;
 			fe->ops.info.frequency_stepsize_hz = 0;
+			break;
+		case SYS_DVBS:
+		case SYS_DVBS2:
+			fe->ops.info.frequency_min_hz = 950 * MHz;
+			fe->ops.info.frequency_max_hz = 2150 * MHz;
+			fe->ops.info.frequency_stepsize_hz = 0;
+			fe->ops.info.symbol_rate_min = 1000000;
+			fe->ops.info.symbol_rate_max = 45000000;
 			break;
 		case SYS_DVBC_ANNEX_A:
 		case SYS_DVBC_ANNEX_B:
@@ -2484,7 +3380,7 @@ static void cxd2878_release(struct dvb_frontend *fe)
 }
 
 static const struct dvb_frontend_ops cxd2878_ops = {
-	.delsys = {SYS_ISDBT,SYS_ISDBS},
+	.delsys = {SYS_ISDBT, SYS_ISDBS, SYS_DVBT, SYS_DVBT2, SYS_DVBS, SYS_DVBS2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_C},
 	.info = {
 			.name = "SONY CXD2857",
 			.frequency_min_hz = 45*MHz,
@@ -2502,6 +3398,8 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 				FE_CAN_QAM_16 |
 				FE_CAN_QAM_32 |
 				FE_CAN_QAM_64 |
+				FE_CAN_QAM_128 |
+				FE_CAN_QAM_256 |
 				FE_CAN_QAM_AUTO |
 				FE_CAN_TRANSMISSION_MODE_AUTO |
 				FE_CAN_GUARD_INTERVAL_AUTO |
